@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Script to resize images > 4 MB to half their dimensions.
+Script to resize images > 3.5 MB to half their dimensions.
 Saves resized copies as (filename)_resized.jpg
+
+Note: The threshold is set to 3.5 MB because when images are base64 encoded (as required
+by some APIs), they increase in size by approximately 33%. A 3.5 MB image becomes ~4.67 MB
+when base64 encoded, staying safely under the 5 MB API limit.
 
 Usage:
     python3 resize_images.py <root_directory>
@@ -12,7 +16,7 @@ Usage:
     The script will:
     1. Recursively scan all subfolders for image files
     2. Check file size for each image
-    3. Resize images > 4 MB to half their dimensions (width/2, height/2)
+    3. Resize images > 3.5 MB to half their dimensions (width/2, height/2)
     4. Save resized copies as (filename)_resized.jpg in the same directory
     
     Supported formats: .jpg, .jpeg, .png, .gif, .bmp, .tiff, .webp, .heic, .heif
@@ -24,8 +28,8 @@ import sys
 from pathlib import Path
 from PIL import Image
 
-# 4 MB in bytes
-MAX_SIZE_BYTES = 4 * 1024 * 1024
+# 3.5 MB in bytes (to ensure base64 encoded images stay under 5 MB API limit)
+MAX_SIZE_BYTES = int(3.5 * 1024 * 1024)
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif'}
@@ -138,7 +142,7 @@ Examples:
         processed_count += 1
         
         if file_size > MAX_SIZE_BYTES:
-            print(f"  ✓ File is > 4 MB, resizing...")
+            print(f"  ✓ File is > 3.5 MB, resizing...")
             result = resize_image(image_path)
             
             if result[0]:
@@ -150,7 +154,7 @@ Examples:
             else:
                 error_count += 1
         else:
-            print(f"  ⊘ Skipped (≤ 4 MB)")
+            print(f"  ⊘ Skipped (≤ 3.5 MB)")
             skipped_count += 1
         
         print()
@@ -160,7 +164,7 @@ Examples:
     print("Summary:")
     print(f"  Total images processed: {processed_count}")
     print(f"  Resized: {resized_count}")
-    print(f"  Skipped (≤ 4 MB): {skipped_count}")
+    print(f"  Skipped (≤ 3.5 MB): {skipped_count}")
     print(f"  Errors: {error_count}")
 
 
