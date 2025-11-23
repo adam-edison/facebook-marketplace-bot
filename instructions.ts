@@ -304,6 +304,26 @@ function assembleAllItems(folderNames: string[]): void {
     console.log('FINAL STEP: Assembling all item.json files');
     console.log('='.repeat(60) + '\n');
     
+    // Load existing items.json if it exists to preserve properties like category, photosNames, etc.
+    let existingItems: any[] = [];
+    if (fs.existsSync(JSON_FILE)) {
+        try {
+            existingItems = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+            console.log(`  ℹ️  Found existing ${JSON_FILE} with ${existingItems.length} items`);
+            console.log(`  ℹ️  Will merge existing properties (category, photosNames, photosFolder, videoName, etc.)\n`);
+        } catch (error) {
+            console.log(`  ⚠️  Could not read existing ${JSON_FILE}, will create new one\n`);
+        }
+    }
+    
+    // Create a map of existing items by title for quick lookup
+    const existingItemsMap = new Map<string, any>();
+    existingItems.forEach(item => {
+        if (item.title) {
+            existingItemsMap.set(item.title, item);
+        }
+    });
+    
     const allItems: any[] = [];
     
     for (const folderName of folderNames) {
@@ -314,8 +334,25 @@ function assembleAllItems(folderNames: string[]): void {
         
         try {
             const itemData = JSON.parse(fs.readFileSync(itemJsonPath, 'utf8'));
-            allItems.push(itemData);
-            console.log(`  ✓ Added: ${folderName}`);
+            
+            // Merge with existing item data if it exists (preserve properties like category, photosNames, etc.)
+            if (itemData.title && existingItemsMap.has(itemData.title)) {
+                const existingItem = existingItemsMap.get(itemData.title);
+                // Merge: new data from item.json takes precedence for core fields, but preserve additional properties
+                const mergedItem = {
+                    ...itemData, // Start with new data from item.json (core fields: title, description lines, priceNew, condition, sellPrice)
+                    // Preserve additional properties from existing items.json if they exist
+                    category: existingItem.category ?? itemData.category,
+                    photosNames: existingItem.photosNames ?? itemData.photosNames,
+                    photosFolder: existingItem.photosFolder ?? itemData.photosFolder,
+                    videoName: existingItem.videoName ?? itemData.videoName,
+                };
+                allItems.push(mergedItem);
+                console.log(`  ✓ Added: ${folderName} (merged with existing data)`);
+            } else {
+                allItems.push(itemData);
+                console.log(`  ✓ Added: ${folderName}`);
+            }
         } catch (error) {
             console.error(`  ✗ Error reading item.json from ${folderName}:`, error);
         }
@@ -323,13 +360,8 @@ function assembleAllItems(folderNames: string[]): void {
     
     console.log('');
     
-    if (fs.existsSync(JSON_FILE)) {
-        fs.unlinkSync(JSON_FILE);
-        console.log(`  ✓ Deleted old ${JSON_FILE}`);
-    }
-    
     fs.writeFileSync(JSON_FILE, JSON.stringify(allItems, null, 2), 'utf8');
-    console.log(`  ✓ Created ${JSON_FILE} with ${allItems.length} items`);
+    console.log(`  ✓ Created/Updated ${JSON_FILE} with ${allItems.length} items`);
     console.log('\n' + '='.repeat(60));
     console.log('PROCESSING COMPLETE');
     console.log('='.repeat(60) + '\n');
