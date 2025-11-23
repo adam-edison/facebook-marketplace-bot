@@ -333,8 +333,8 @@ function loadItems(): Item[] {
 }
 
 // Process a single item
-function processItem(item: Item, items: Item[], index: number, totalItems: number, stats: Statistics): void {
-    if (item.category) {
+function processItem(item: Item, items: Item[], index: number, totalItems: number, stats: Statistics, overwrite: boolean): void {
+    if (!overwrite && item.category) {
         const titlePreview = item.title.substring(0, 60);
         console.log(`[${index + 1}/${totalItems}] Skipping: ${titlePreview}... (category already exists: ${item.category})`);
         stats.skipped++;
@@ -384,6 +384,14 @@ function main(): void {
     console.log('CATEGORIZER: Adding categories to items');
     console.log('='.repeat(60) + '\n');
     
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    const overwrite = args.includes('--overwrite') || args.includes('-o');
+    
+    if (overwrite) {
+        console.log('⚠️  Overwrite mode enabled - will update existing categories\n');
+    }
+    
     const items = loadItems();
     console.log(`Found ${items.length} items to process\n`);
     
@@ -396,7 +404,7 @@ function main(): void {
     const startTime = Date.now();
     
     items.forEach((item, index) => {
-        processItem(item, items, index + 1, items.length, stats);
+        processItem(item, items, index + 1, items.length, stats, overwrite);
     });
     
     // Final save (redundant but safe - items are already saved after each success)

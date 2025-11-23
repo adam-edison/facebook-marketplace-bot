@@ -73,13 +73,20 @@ This script adds categories to each item in `items.json` using AI categorization
 
 **Usage:**
 ```bash
+# Normal mode (skips items that already have categories)
 npx tsx categorizer.ts
+
+# Overwrite mode (updates existing categories)
+npx tsx categorizer.ts --overwrite
+# Or use short flag
+npx tsx categorizer.ts -o
 ```
 
 This script will:
 - Read `items.json`
 - Assign appropriate categories to each item
 - Update `items.json` with category information
+- Skip items that already have categories (unless `--overwrite` is used)
 
 ### 3. Add Photo Information (`add_photos.ts`)
 This script adds photo folder paths and photo filenames to each item in `items.json`.
@@ -91,21 +98,48 @@ npx tsx add_photos.ts
 
 # Or specify a directory containing item folders
 npx tsx add_photos.ts "/path/to/photos/directory"
+
+# Overwrite mode (updates existing photo entries)
+npx tsx add_photos.ts --overwrite
+# Or use short flag
+npx tsx add_photos.ts -o
 ```
 
 This script will:
 - Match folders to items by index
 - Add `photosFolder` (folder path) to each item
 - Add `photosNames` (array of filenames) to each item
+- Skip files with "resized" in the filename
+- Skip items that already have photos (unless `--overwrite` is used)
 
-**Note:** Make sure `items-info.json` contains your Facebook groups:
-```json
-{
-  "facebookGroups": ["Group name 1", "Group name 2"]
-}
+### 4. Add Video Information (`add_videos.ts`)
+This script adds video filenames to each item in `items.json` (max 1 video per item).
+
+**Usage:**
+```bash
+# Use current directory (where folders with videos are located)
+npx tsx add_videos.ts
+
+# Or specify a directory containing item folders
+npx tsx add_videos.ts "/path/to/photos/directory"
+
+# Overwrite mode (updates existing video entries)
+npx tsx add_videos.ts --overwrite
+# Or use short flag
+npx tsx add_videos.ts -o
 ```
 
-### 4. Generate CSV (`json_to_csv.ts`)
+This script will:
+- Match folders to items by index
+- Find the first video file in each folder
+- Add `videoName` (filename) to each item
+- Skip files with "resized" in the filename
+- Skip items that already have videos (unless `--overwrite` is used)
+- Supports common video formats: `.mp4`, `.mov`, `.avi`, `.mkv`, `.webm`, `.m4v`
+
+**Note:** Videos use the same folder as photos (`photosFolder`).
+
+### 5. Generate CSV (`json_to_csv.ts`)
 This script converts `items.json` to CSV format for the marketplace bot.
 
 **Usage:**
@@ -118,9 +152,17 @@ This script will:
 - Convert items to CSV format
 - Append rows to `csvs/items.csv`
 
-**Note:** The CSV will include:
+**Note:** Make sure `items-info.json` contains your Facebook groups:
+```json
+{
+  "facebookGroups": ["Group name 1", "Group name 2"]
+}
+```
+
+The CSV will include:
 - Photos folder paths (from each item's `photosFolder`)
 - Photo names formatted as semicolon-separated strings
+- Video name (single filename, if present)
 - Facebook groups from `items-info.json` formatted as semicolon-separated strings
 
 ## How to Use
@@ -128,12 +170,11 @@ This script will:
 2. Open the `csvs` folder
 3. Add items or vehicles in the `items.csv` and `vehicles.csv` files. You can open these files with programs like `Microsoft Excel`, `LibreOffice Calc`, etc
 4. Please note these things for the csv columns:
-	- `Photos Folder` column you will have to define only the folder path for the photos like this:
-	    - Windows `C:\Pictures`
-	    - Linux/Mac `/Users/myuser/Pictures`
-	- `Photos Names` column should only have the names of photos separated with this symbol `;` like this `Photo 1.JPG; Photo 2.png; Photo3.jpg`
+	- `Photos Folder` column contains the folder path for the photos (automatically populated by `add_photos.ts`)
+	- `Photos Names` column contains the names of photos separated with this symbol `;` like this `Photo 1.JPG; Photo 2.png; Photo3.jpg` (automatically populated by `add_photos.ts`)
+	- `Video Name` column contains a single video filename (automatically populated by `add_videos.ts`, max 1 video per item)
 	- Marketplace fields that you have to select an option like `Category`, `Condition`, `Vehicle Type`, `Fuel Type`. You have to type the exact name of the option that you want to choose.
-	- `Groups` column can have multiple groups and you will have to type their exact name and separate them by this symbol `;`. Example - `Group name 1; Group name 2; Group name`
+	- `Groups` column contains multiple groups separated by this symbol `;`. Example - `Group name 1; Group name 2; Group name` (automatically populated from `items-info.json`)
 5. Open terminal inside the main project folder
 6. Run main.py with this command:
     - Windows / Linux

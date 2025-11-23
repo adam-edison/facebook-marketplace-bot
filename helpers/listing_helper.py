@@ -49,6 +49,12 @@ def publish_listing(data, listing_type, scraper):
 	images_path = generate_multiple_images_path(data['Photos Folder'], data['Photos Names'])
 	# Add images to the the listing
 	scraper.input_file_add_files('input[accept="image/*,image/heif,image/heic"]', images_path)
+	
+	# Add video if present (max 1 video per item)
+	if 'Video Name' in data and data['Video Name'] and data['Video Name'].strip():
+		video_path = generate_video_path(data['Photos Folder'], data['Video Name'])
+		# Add video to the listing (Facebook accepts videos in the same input)
+		scraper.input_file_add_files('input[accept="image/*,image/heif,image/heic,video/*"]', video_path)
 
 	# Add specific fields based on the listing_type
 	function_name = 'add_fields_for_' + listing_type
@@ -115,6 +121,16 @@ def generate_multiple_images_path(path, images):
 			images_path += path + image_name
 
 	return images_path
+
+def generate_video_path(path, video_name):
+	# Last character must be '/' because after that we are adding the name of the video
+	if path[-1] != '/':
+		path += '/'
+	
+	# Remove whitespace before and after the string
+	video_name = video_name.strip()
+	
+	return path + video_name
 
 # Add specific fields for listing from type vehicle
 def add_fields_for_vehicle(data, scraper):

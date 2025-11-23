@@ -9,6 +9,7 @@ interface Item {
     category?: string;
     photosNames?: string[];
     photosFolder?: string;
+    videoName?: string;
 }
 
 interface Info {
@@ -58,6 +59,7 @@ function jsonToCsv(): void {
         const title = item.title || '';
         const photosFolder = item.photosFolder || '';
         const photosNames = formatArrayAsSemicolonSeparated(item.photosNames || []);
+        const videoName = item.videoName || '';
         const price = item.sellPrice || '';
         const category = item.category || '';
         const condition = item.condition || '';
@@ -70,6 +72,7 @@ function jsonToCsv(): void {
             escapeCsvField(title),
             escapeCsvField(photosFolder),
             escapeCsvField(photosNames),
+            escapeCsvField(videoName),
             escapeCsvField(price),
             escapeCsvField(category),
             escapeCsvField(condition),
