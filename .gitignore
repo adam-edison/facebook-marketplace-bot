@@ -6,3 +6,15 @@ csvs/vehicles.csv
 csvs/*.backup.csv
 
 items*.json
+
+# Node.js
+node_modules/
+dist/
+*.log
+.env
+.env.local
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
