@@ -48,14 +48,70 @@ function validateCategory(category: string): boolean {
     return result.status === 0 && result.stdout.trim() !== '';
 }
 
-// Clean category output from markdown formatting
-function cleanCategoryOutput(output: string): string {
-    return output
+// Extract category path from output, handling verbose explanations
+function extractCategoryPath(output: string): string {
+    // First, remove markdown formatting
+    let cleaned = output
         .replace(/^```.*?\n/i, '')
         .replace(/\n```$/i, '')
         .replace(/^`/g, '')
         .replace(/`$/g, '')
         .trim();
+    
+    // Look for lines containing "//" which indicates a category path
+    const lines = cleaned.split('\n');
+    const categoryLine = lines.find(line => line.includes('//'));
+    
+    if (categoryLine) {
+        // Extract just the category path, removing any leading/trailing text
+        // Match pattern: category parts separated by //, where each part can contain letters, numbers, spaces, &, ', -, commas
+        // Example: "Tools & Home Improvement//Tools//Hand Tools"
+        // Note: forward slash (/) is NOT in the character class - only // is used as separator
+        const match = categoryLine.match(/([A-Za-z0-9 &'\-,]+(?:\/\/[A-Za-z0-9 &'\-,]+)+)/);
+        if (match) {
+            // Extract the matched category path
+            let categoryPath = match[1].trim();
+            // Clean up any leading/trailing slashes (shouldn't happen but be safe)
+            categoryPath = categoryPath.replace(/^\/+/, '').replace(/\/+$/, '');
+            return categoryPath;
+        }
+    }
+    
+    // If no "//" found, check if entire output is a single category (no slashes)
+    // Categories without slashes are top-level categories
+    const singleLine = cleaned.split('\n')[0].trim();
+    if (singleLine && !singleLine.includes('\n') && singleLine.length < 200) {
+        // Check if it looks like a category name (not an explanation)
+        const looksLikeCategory = !singleLine.toLowerCase().includes('based on') &&
+                                   !singleLine.toLowerCase().includes('the most') &&
+                                   !singleLine.toLowerCase().includes('category') &&
+                                   !singleLine.toLowerCase().includes('would be') &&
+                                   !singleLine.toLowerCase().includes('appropriate');
+        if (looksLikeCategory) {
+            return singleLine;
+        }
+    }
+    
+    // Fallback: try to extract category from verbose text
+    // Look for patterns like "CategoryName//Subcategory" anywhere in the text
+    // Categories can contain: letters, numbers, spaces, &, ', -, commas, separated by //
+    // Note: forward slash (/) is NOT in the character class - only // is used as separator
+    const categoryPattern = /([A-Za-z0-9 &'\-,]+(?:\/\/[A-Za-z0-9 &'\-,]+)+)/;
+    const categoryMatch = cleaned.match(categoryPattern);
+    if (categoryMatch) {
+        let categoryPath = categoryMatch[1].trim();
+        // Clean up any leading/trailing slashes (shouldn't happen but be safe)
+        categoryPath = categoryPath.replace(/^\/+/, '').replace(/\/+$/, '');
+        return categoryPath;
+    }
+    
+    // Last resort: return cleaned output (will be validated)
+    return cleaned;
+}
+
+// Clean category output from markdown formatting and verbose explanations
+function cleanCategoryOutput(output: string): string {
+    return extractCategoryPath(output);
 }
 
 // Build initial prompt for category selection
@@ -69,14 +125,24 @@ Given the following item information, select the MOST SPECIFIC and ACCURATE cate
 Item Information:
 ${itemInfo}
 
-IMPORTANT:
-- You must respond with ONLY the exact category string as it appears in categories.txt
+CRITICAL REQUIREMENTS:
+- You MUST respond with ONLY the exact category string as it appears in categories.txt
 - Use the most specific category available (prefer subcategories over general categories)
 - The category must match EXACTLY including any forward slashes (//) used for hierarchy
-- Do not include any explanations, just the category name
-- Example format: "Tools & Home Improvement//Tools//Hand Tools//Wrenches"
+- DO NOT include any explanations, reasoning, or additional text
+- DO NOT write phrases like "Based on my search" or "The most appropriate category would be"
+- DO NOT include any text before or after the category name
+- Just output the category path and nothing else
 
-Respond with only the category name:`;
+CORRECT Example:
+Tools & Home Improvement//Tools//Hand Tools//Wrenches
+
+INCORRECT Examples (DO NOT DO THIS):
+❌ "Based on my search, the category is: Tools & Home Improvement//Tools//Hand Tools//Wrenches"
+❌ "The most appropriate category would be:\n\nTools & Home Improvement//Tools//Hand Tools//Wrenches"
+❌ "Tools & Home Improvement//Tools//Hand Tools//Wrenches (this is the best match)"
+
+Respond with ONLY the category name, nothing else:`;
 }
 
 // Add retry context to prompt based on error type
@@ -88,14 +154,18 @@ function addRetryContext(prompt: string, error: string, lastResponse?: string): 
     }
     
     if (error.includes('Category not found')) {
-        return `${prompt}${retryMessage}\n\nThe category you provided does not exist in categories.txt. Please check the file and provide an EXACT match from the available categories. Make sure to use the exact format including forward slashes if it's a subcategory.`;
+        return `${prompt}${retryMessage}\n\nThe category you provided does not exist in categories.txt. Please check the file and provide an EXACT match from the available categories. Make sure to use the exact format including forward slashes if it's a subcategory. Remember: respond with ONLY the category path, no explanations.`;
     }
     
     if (error.includes('No output')) {
-        return `${prompt}${retryMessage}\n\nPlease provide a category name.`;
+        return `${prompt}${retryMessage}\n\nPlease provide a category name. Remember: respond with ONLY the category path, no explanations.`;
     }
     
-    return `${prompt}${retryMessage}\n\nPlease try again and provide a valid category name that exists in categories.txt.`;
+    if (error.includes('verbose') || (lastResponse && lastResponse.length > 200)) {
+        return `${prompt}${retryMessage}\n\nYour response included unnecessary explanations. Please respond with ONLY the category path, nothing else. No explanations, no reasoning, just the category name.`;
+    }
+    
+    return `${prompt}${retryMessage}\n\nPlease try again and provide a valid category name that exists in categories.txt. Remember: respond with ONLY the category path, no explanations.`;
 }
 
 // Handle process error
@@ -190,6 +260,22 @@ function attemptGetCategory(prompt: string, retryCount: number): RetryResult {
     }
     
     const cleanedCategory = cleanCategoryOutput(output);
+    
+    // Check if output was verbose (contains explanatory text)
+    const isVerbose = output.length > cleanedCategory.length + 50 || 
+                      output.toLowerCase().includes('based on') ||
+                      output.toLowerCase().includes('the most appropriate') ||
+                      output.toLowerCase().includes('would be');
+    
+    if (isVerbose && retryCount < MAX_RETRIES - 1) {
+        return {
+            success: false,
+            error: 'Verbose response detected - contains explanations',
+            lastResponse: output,
+            shouldRetry: true
+        };
+    }
+    
     if (!validateCategory(cleanedCategory)) {
         return handleInvalidCategory(cleanedCategory, retryCount + 1, output);
     }
