@@ -6,6 +6,7 @@ Facebook marketplace bot that automatically removes and then uploads listings fr
 - [Technologies used](#technologies-used)
 - [Functionalities](#functionalities)
 - [Installation](#installation)
+- [TypeScript Scripts Workflow](#typescript-scripts-workflow)
 - [How to Use](#how-to-use)
 
 ## Technologies Used
@@ -39,6 +40,88 @@ Facebook marketplace bot that automatically removes and then uploads listings fr
       python -m pip install webdriver-manager
       ```
 3. Install the `Google Chrome` browser if you don't have it already - https://www.google.com/chrome/.
+4. Install Node.js and npm if you don't have them already - https://nodejs.org/
+5. Install TypeScript execution tool:
+   ```bash
+   npm install -g tsx
+   ```
+   Or use `npx tsx` without global installation.
+
+## TypeScript Scripts Workflow
+
+Before uploading items to Facebook Marketplace, you need to prepare your items data using the TypeScript scripts. Run these scripts in order:
+
+### 1. Generate Item Data (`instructions.ts`)
+This script processes folders containing item photos and generates `items.json` with item descriptions, titles, prices, and conditions.
+
+**Usage:**
+```bash
+# Use current directory (where folders with photos are located)
+npx tsx instructions.ts
+
+# Or specify a directory containing item folders
+npx tsx instructions.ts "/path/to/photos/directory"
+```
+
+This script will:
+- Process images in each folder to generate descriptions
+- Create `item.json` files in each folder
+- Assemble all items into `items.json`
+
+### 2. Categorize Items (`categorizer.ts`)
+This script adds categories to each item in `items.json` using AI categorization.
+
+**Usage:**
+```bash
+npx tsx categorizer.ts
+```
+
+This script will:
+- Read `items.json`
+- Assign appropriate categories to each item
+- Update `items.json` with category information
+
+### 3. Add Photo Information (`add_photos.ts`)
+This script adds photo folder paths and photo filenames to each item in `items.json`.
+
+**Usage:**
+```bash
+# Use current directory (where folders with photos are located)
+npx tsx add_photos.ts
+
+# Or specify a directory containing item folders
+npx tsx add_photos.ts "/path/to/photos/directory"
+```
+
+This script will:
+- Match folders to items by index
+- Add `photosFolder` (folder path) to each item
+- Add `photosNames` (array of filenames) to each item
+
+**Note:** Make sure `items-info.json` contains your Facebook groups:
+```json
+{
+  "facebookGroups": ["Group name 1", "Group name 2"]
+}
+```
+
+### 4. Generate CSV (`json_to_csv.ts`)
+This script converts `items.json` to CSV format for the marketplace bot.
+
+**Usage:**
+```bash
+npx tsx json_to_csv.ts
+```
+
+This script will:
+- Read `items.json` and `items-info.json`
+- Convert items to CSV format
+- Append rows to `csvs/items.csv`
+
+**Note:** The CSV will include:
+- Photos folder paths (from each item's `photosFolder`)
+- Photo names formatted as semicolon-separated strings
+- Facebook groups from `items-info.json` formatted as semicolon-separated strings
 
 ## How to Use
 1. Open folder where this project is saved on your local machine

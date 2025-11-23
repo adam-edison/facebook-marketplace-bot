@@ -3,9 +3,11 @@ import fs from 'fs';
 import path from 'path';
 
 const JSON_FILE = './items.json';
-const DIRECTORY = './';
 const promptTemplate = fs.readFileSync('./prompt.txt', 'utf8');
 const MAX_RETRIES = 3;
+
+// Get directory from command line argument, or use current directory
+const DIRECTORY = process.argv[2] || './';
 
 // Standard description lines to prepend
 const STANDARD_DESCRIPTION_LINES = [
