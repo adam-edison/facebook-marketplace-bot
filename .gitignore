@@ -3,4 +3,4 @@ cookies/
 .DS_Store
 csvs
 
-items.json
+items*.json
