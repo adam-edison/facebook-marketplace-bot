@@ -1,0 +1,32 @@
+{
+  "name": "facebook-marketplace-bot",
+  "version": "1.0.0",
+  "description": "Facebook marketplace bot that automatically removes and then uploads listings from CSV Files. You can define all of the information about the items and vehicles that will be posted automatically so you will save time removing and publishing them every single time. We are doing this to show the listings on the top of the marketplace or groups in order to be seen by more people and that leads to selling the items or vehicles faster.",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx main.ts",
+    "login": "tsx save-login.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adam-edison/facebook-marketplace-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/adam-edison/facebook-marketplace-bot/issues"
+  },
+  "homepage": "https://github.com/adam-edison/facebook-marketplace-bot#readme",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "playwright": "^1.56.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "csv-parse": "^6.1.0",
+    "csv-stringify": "^6.6.0"
+  }
+}
