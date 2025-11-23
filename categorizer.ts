@@ -247,7 +247,7 @@ function loadItems(): Item[] {
 }
 
 // Process a single item
-function processItem(item: Item, index: number, totalItems: number, stats: Statistics): void {
+function processItem(item: Item, items: Item[], index: number, totalItems: number, stats: Statistics): void {
     if (item.category) {
         const titlePreview = item.title.substring(0, 60);
         console.log(`[${index + 1}/${totalItems}] Skipping: ${titlePreview}... (category already exists: ${item.category})`);
@@ -269,6 +269,9 @@ function processItem(item: Item, index: number, totalItems: number, stats: Stati
     item.category = category;
     console.log(`      ✓ Category: ${category}\n`);
     stats.added++;
+    
+    // Save items after each successful category assignment
+    saveItems(items);
 }
 
 // Save items to JSON file
@@ -307,9 +310,10 @@ function main(): void {
     const startTime = Date.now();
     
     items.forEach((item, index) => {
-        processItem(item, index + 1, items.length, stats);
+        processItem(item, items, index + 1, items.length, stats);
     });
     
+    // Final save (redundant but safe - items are already saved after each success)
     saveItems(items);
     
     const endTime = Date.now();
