@@ -49,12 +49,37 @@ function jsonToCsv(): void {
     const groups = formatArrayAsSemicolonSeparated(info.facebookGroups || []);
     const location = info.location || '';
     
+    // Check if items.json exists
+    if (!fs.existsSync(JSON_FILE)) {
+        console.error(`Error: ${JSON_FILE} not found`);
+        process.exit(1);
+    }
+    
     // Read items.json
-    const jsonContent = fs.readFileSync(JSON_FILE, 'utf-8');
-    const items: Item[] = JSON.parse(jsonContent);
+    let items: Item[];
+    try {
+        const jsonContent = fs.readFileSync(JSON_FILE, 'utf-8');
+        items = JSON.parse(jsonContent);
+    } catch (error) {
+        console.error(`Error reading or parsing ${JSON_FILE}:`, error);
+        process.exit(1);
+        return; // TypeScript doesn't know process.exit never returns
+    }
+    
+    // Ensure csvs directory exists
+    const csvDir = './csvs';
+    if (!fs.existsSync(csvDir)) {
+        fs.mkdirSync(csvDir, { recursive: true });
+    }
     
     // Open CSV file in append mode
     const csvStream = fs.createWriteStream(CSV_FILE, { flags: 'a', encoding: 'utf-8' });
+    
+    // Handle stream errors
+    csvStream.on('error', (error) => {
+        console.error(`Error writing to ${CSV_FILE}:`, error);
+        process.exit(1);
+    });
     
     // Process each item
     for (const item of items) {
