@@ -42,7 +42,9 @@ function getPhotoFiles(folderPath: string): string[] {
     const files = fs.readdirSync(folderPath)
         .filter(file => {
             const ext = path.extname(file).toLowerCase();
-            return imageExtensions.includes(ext);
+            const isImage = imageExtensions.includes(ext);
+            const hasResized = file.toLowerCase().includes('resized');
+            return isImage && !hasResized;
         })
         .sort((a, b) => a.localeCompare(b));
     
@@ -50,8 +52,8 @@ function getPhotoFiles(folderPath: string): string[] {
 }
 
 // Process a single item
-function processItem(item: Item, items: Item[], folderPath: string, folderName: string, index: number, totalItems: number, stats: Statistics): void {
-    if (item.photosNames && item.photosNames.length > 0 && item.photosFolder) {
+function processItem(item: Item, items: Item[], folderPath: string, folderName: string, index: number, totalItems: number, stats: Statistics, overwrite: boolean): void {
+    if (!overwrite && item.photosNames && item.photosNames.length > 0 && item.photosFolder) {
         const titlePreview = item.title.substring(0, 60);
         console.log(`[${index + 1}/${totalItems}] Skipping: ${titlePreview}... (photosNames already exists: ${item.photosNames.length} photos)`);
         stats.skipped++;
@@ -98,8 +100,15 @@ function main(): void {
     console.log('ADD PHOTOS: Adding photo names to items');
     console.log('='.repeat(60) + '\n');
     
-    // Get directory from command line argument, or use current directory
-    const directory = process.argv[2] || './';
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    const overwrite = args.includes('--overwrite') || args.includes('-o');
+    const directoryArg = args.find(arg => !arg.startsWith('--') && !arg.startsWith('-'));
+    const directory = directoryArg || './';
+    
+    if (overwrite) {
+        console.log('⚠️  Overwrite mode enabled - will update existing photo entries\n');
+    }
     
     console.log(`Directory: ${directory}\n`);
     
@@ -139,7 +148,7 @@ function main(): void {
         
         const folderPath = path.join(directory, folderName);
         const item = items[index];
-        processItem(item, items, folderPath, folderName, index, Math.min(folderNames.length, items.length), stats);
+        processItem(item, items, folderPath, folderName, index, Math.min(folderNames.length, items.length), stats, overwrite);
     });
     
     // Final save (redundant but safe - items are already saved after each success)
