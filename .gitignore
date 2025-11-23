@@ -1,6 +1,8 @@
 __pycache__/
 cookies/
 .DS_Store
-csvs
+csvs/items.csv
+csvs/vehicles.csv
+csvs/*.backup.csv
 
 items*.json
