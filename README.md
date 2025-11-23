@@ -152,10 +152,11 @@ This script will:
 - Convert items to CSV format
 - Append rows to `csvs/items.csv`
 
-**Note:** Make sure `items-info.json` contains your Facebook groups:
+**Note:** Make sure `items-info.json` contains your Facebook groups and location:
 ```json
 {
-  "facebookGroups": ["Group name 1", "Group name 2"]
+  "facebookGroups": ["Group name 1", "Group name 2"],
+  "location": "City, State"
 }
 ```
 
