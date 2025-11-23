@@ -14,6 +14,7 @@ interface Item {
 
 interface Info {
     facebookGroups: string[];
+    location?: string;
 }
 
 const JSON_FILE = './items.json';
@@ -46,6 +47,7 @@ function jsonToCsv(): void {
     // Load items-info.json
     const info = loadInfo();
     const groups = formatArrayAsSemicolonSeparated(info.facebookGroups || []);
+    const location = info.location || '';
     
     // Read items.json
     const jsonContent = fs.readFileSync(JSON_FILE, 'utf-8');
@@ -65,7 +67,6 @@ function jsonToCsv(): void {
         const condition = item.condition || '';
         const brand = '';
         const description = (item['description lines'] || []).join('\n');
-        const location = '';
         
         // Format row according to CSV format
         const row = [
