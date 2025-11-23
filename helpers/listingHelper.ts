@@ -276,6 +276,15 @@ async function publishListing(
     // Select meetup preferences (Door pickup)
     await selectMeetupPreferences(scraper);
     
+    // Click Next again to proceed from delivery method page
+    await scraper.page!.waitForTimeout(1000);
+    const secondNextButton = scraper.page!.getByRole('button', { name: /next/i }).first();
+    if (await secondNextButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await secondNextButton.click();
+      console.log('✅ Clicked Next (delivery method page)');
+      await scraper.page!.waitForTimeout(1000);
+    }
+    
     // Add listing to multiple groups
     await addListingToMultipleGroups(data, scraper);
   }
@@ -308,6 +317,7 @@ async function publishListing(
   // Update CSV status to "posted" after successful publication
   if (data._rowIndex !== undefined) {
     updateCsvStatus(csvFileName, data._rowIndex, 'posted');
+    console.log(`✅ ✅ ✅ Finished posting listing: "${data['Title']}" - Marked as posted in CSV`);
   }
 
   return true;
