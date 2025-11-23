@@ -1,0 +1,39 @@
+Analyze the item description below and create a Facebook Marketplace listing entry.
+
+## Steps (complete quickly, do not overthink):
+
+1. **Identify item**: From the description, identify the item type, brand, and model number if mentioned.
+
+2. **Quick price lookup**: Do ONE web search for "[brand] [model] price" OR "[item type] price new". Use the first reasonable price you find. Do not search more than once. If no exact match, estimate based on similar items.
+
+3. **Output ONLY this JSON object** (no other text, no markdown, no explanation):
+
+```
+{
+    "title": "EMOJI Item name here",
+    "description lines": [
+        "EMOJI Feature 1",
+        "EMOJI Feature 2"
+    ],
+    "priceNew": "XX",
+    "condition": "CONDITION_VALUE"
+}
+```
+
+## STRICT RULES:
+
+- **title**: Single emoji + item name. MAX 80 characters total.
+- **description lines**: Array of strings. Each line MAX 50 characters. Each starts with emoji. Include only item-specific features/descriptions (do NOT include pickup info).
+- **priceNew**: String, numbers only (no $ sign)
+- **condition**: MUST be exactly one of: "New" | "Used - Like New" | "Used - Good" | "Used - Fair"
+
+## DO NOT:
+- Add any keys not shown above (no "images", no "category", no "location", etc.)
+- Add comments in the JSON
+- Wrap in markdown code blocks
+- Include any explanation before or after the JSON
+- Spend more than 1 search query on pricing
+- Include pickup/payment information in description lines
+
+## Item Description:
+DESCRIPTION_CONTENT
