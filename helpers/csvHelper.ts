@@ -36,12 +36,15 @@ export function getDataFromCsv(csvFileName: string): ListingData[] {
     
     // Parse data rows
     const data: ListingData[] = [];
+    let skippedCount = 0;
+    
     for (let i = 0; i < records.length; i++) {
       const row = records[i] as any;
       
       // Skip entries that are already posted
       const status = (row['Status'] || '').trim().toLowerCase();
       if (status === 'posted') {
+        skippedCount++;
         continue;
       }
       
@@ -50,6 +53,8 @@ export function getDataFromCsv(csvFileName: string): ListingData[] {
       
       data.push(row as ListingData);
     }
+    
+    console.log(`📊 Loaded ${data.length} listing(s) to process, skipped ${skippedCount} already posted`);
     
     return data;
   } catch (error) {

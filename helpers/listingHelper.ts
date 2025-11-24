@@ -118,6 +118,7 @@ export async function updateListings(
   for (const listing of listings) {
     // Skip if already posted (shouldn't happen due to filtering, but double-check)
     if (listing.Status && listing.Status.trim().toLowerCase() === 'posted') {
+      console.log(`⏭️  Skipping already posted: "${listing['Title']}"`);
       continue;
     }
 
