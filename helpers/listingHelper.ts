@@ -989,15 +989,15 @@ async function addListingToMultipleGroups(data: ListingData, scraper: Scraper): 
   for (const groupName of groupNames) {
     try {
       console.log(`🔍 Looking for group: ${groupName}`);
-      // Try using getByText with a longer timeout
-      await scraper.page!.getByText(groupName).first().click({ timeout: 45000 });
+      // Try using getByText with a 5 second timeout
+      await scraper.page!.getByText(groupName).first().click({ timeout: 5000 });
       console.log(`✅ Selected group: ${groupName}`);
       await scraper.page!.waitForTimeout(500);
     } catch (e) {
       try {
-        // Fallback to XPath with increased timeout
+        // Fallback to XPath with 5 second timeout
         console.log(`⚠️ Trying XPath selector for group: ${groupName}`);
-        await scraper.page!.click(`xpath=//span[text()="${escapeXPathString(groupName)}"]`, { timeout: 45000 });
+        await scraper.page!.click(`xpath=//span[text()="${escapeXPathString(groupName)}"]`, { timeout: 5000 });
         console.log(`✅ Selected group via XPath: ${groupName}`);
         await scraper.page!.waitForTimeout(500);
       } catch (e2) {
