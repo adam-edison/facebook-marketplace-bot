@@ -146,35 +146,29 @@ async function publishListing(
   // Wait a bit for form to fully render
   await scraper.page!.waitForTimeout(1000);
 
-  // Add images
+  // Collect all files to upload (images + video)
   const imagesPaths = generateMultipleImagesPath(data['Photos Folder'], data['Photos Names']);
-  if (imagesPaths.length > 0) {
-    // Directly interact with the hidden file input (no need to click button)
-    const fileInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
-    await fileInput.setInputFiles(imagesPaths);
-    // Wait for images to upload
-    await scraper.page!.waitForTimeout(2000);
-  }
-
-  // Add video if present
+  const allFilePaths = [...imagesPaths];
+  
+  // Add video to the file list if present
   if (data['Video Name'] && data['Video Name'].trim()) {
     const videoPath = generateVideoPath(data['Photos Folder'], data['Video Name']);
+    allFilePaths.push(videoPath);
+    console.log(`📹 Adding video: ${videoPath}`);
+  }
+  
+  // Upload all files (images + video) at once
+  if (allFilePaths.length > 0) {
+    // Directly interact with the hidden file input (no need to click button)
+    // Facebook accepts both images and videos in the same input
+    const fileInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
+    await fileInput.setInputFiles(allFilePaths);
     
-    // Try clicking "Add video" button first
-    try {
-      const addVideoButton = scraper.page!.getByRole('button', { name: /add video/i }).first();
-      if (await addVideoButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await addVideoButton.click();
-        await scraper.page!.waitForTimeout(500);
-      }
-    } catch (e) {
-      // Button might not exist, continue anyway
-    }
-    
-    // Use the same input (Facebook accepts videos in the same input as images)
-    const videoInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
-    await videoInput.setInputFiles([videoPath]);
-    await scraper.page!.waitForTimeout(2000);
+    // Wait longer for files to upload (especially for video)
+    const hasVideo = data['Video Name'] && data['Video Name'].trim();
+    const uploadWaitTime = hasVideo ? 5000 : 2000;
+    console.log(`⏳ Waiting ${uploadWaitTime}ms for ${allFilePaths.length} file(s) to upload...`);
+    await scraper.page!.waitForTimeout(uploadWaitTime);
   }
 
   // Fill fields in order: Title, Price, Category, Condition, Description
