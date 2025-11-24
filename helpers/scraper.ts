@@ -7,6 +7,11 @@ export class Scraper {
   private context: BrowserContext | null = null;
   public page: Page | null = null;
   private storageStateFolder = 'cookies';
+  private headless: boolean;
+
+  constructor(headless: boolean = false) {
+    this.headless = headless;
+  }
 
   /**
    * Initialize the browser with optional storage state (saved login)
@@ -16,7 +21,7 @@ export class Scraper {
     storageStatePath?: string
   ): Promise<void> {
     this.browser = await chromium.launch({
-      headless: false,
+      headless: this.headless,
       // Add options to make it look less like a bot and fix rendering
       args: [
         '--disable-blink-features=AutomationControlled',

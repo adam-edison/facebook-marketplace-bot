@@ -8,6 +8,7 @@ async function main() {
   // Parse command-line arguments
   const args = process.argv.slice(2);
   let maxPosts: number | undefined = undefined;
+  let headless = false; // Default to visible browser
   
   // Check for --max-posts or -n flag
   for (let i = 0; i < args.length; i++) {
@@ -18,14 +19,16 @@ async function main() {
         console.log(`📊 Max posts limit set to: ${maxPosts}`);
       } else {
         console.error(`❌ Invalid value for ${args[i]}: ${args[i + 1]}`);
-        console.log(`Usage: npx tsx main.ts [--max-posts|-n NUMBER]`);
+        console.log(`Usage: npx tsx main.ts [--max-posts|-n NUMBER] [--headless]`);
         process.exit(1);
       }
-      break;
+    } else if (args[i] === '--headless') {
+      headless = true;
+      console.log(`👁️  Headless mode enabled`);
     }
   }
   
-  const scraper = new Scraper();
+  const scraper = new Scraper(headless);
   
   try {
     // Try to load saved login state
