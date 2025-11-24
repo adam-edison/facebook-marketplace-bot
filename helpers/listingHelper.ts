@@ -582,7 +582,7 @@ async function addFieldsForItem(data: ListingData, scraper: Scraper): Promise<vo
     console.log('⚠️  Could not fill price:', e);
   }
 
-  // 3. Select Category with fuzzy matching
+  // 3. Select Category with fuzzy matching and fallback to parent categories
   try {
     const categoryBox = scraper.page!.locator('input[aria-label="Category"]').first();
     await categoryBox.waitFor({ timeout: 2000, state: 'visible' });
@@ -590,40 +590,58 @@ async function addFieldsForItem(data: ListingData, scraper: Scraper): Promise<vo
     await categoryBox.click();
     await scraper.page!.waitForTimeout(500);
     
-    // Extract last segment of category to use as search term
-    const fullCategory = data['Category']; // e.g., "Hand Tools // Wrenches"
-    let categoryToType = fullCategory;
-    if (categoryToType.includes('//')) {
-      const segments = categoryToType.split('//');
-      categoryToType = segments[segments.length - 1].trim();
+    // Parse category hierarchy (e.g., "Tools & Home Improvement // Tools // Hand Tools // Wrenches")
+    const fullCategory = data['Category'];
+    const categorySegments = fullCategory.split('//').map(s => s.trim()).filter(s => s.length > 0);
+    
+    console.log(`🔍 Category hierarchy: ${categorySegments.join(' → ')}`);
+    
+    let dropdownOptions: any[] = [];
+    let categoryToType = '';
+    let attemptedCategories: string[] = [];
+    
+    // Try from most specific to most general
+    for (let i = categorySegments.length - 1; i >= 0; i--) {
+      categoryToType = categorySegments[i];
+      attemptedCategories.push(categoryToType);
+      
+      console.log(`🔎 Trying category: "${categoryToType}"`);
+      
+      // Clear and type the search term
+      await categoryBox.fill('');
+      await scraper.page!.waitForTimeout(300);
+      await categoryBox.fill(categoryToType);
+      await scraper.page!.waitForTimeout(2000); // Wait for dropdown to populate
+      
+      // Wait for dropdown to appear - try multiple selectors
+      try {
+        await scraper.page!.waitForSelector('div[role="option"], ul[role="listbox"] > *, div[role="listbox"] > *', { timeout: 3000, state: 'visible' });
+      } catch (e) {
+        // Dropdown didn't appear, will check for options anyway
+      }
+      
+      // Get all dropdown options - try multiple selectors
+      dropdownOptions = await scraper.page!.locator('div[role="option"]').all();
+      
+      // Try alternative selectors if first one didn't work
+      if (dropdownOptions.length === 0) {
+        dropdownOptions = await scraper.page!.locator('ul[role="listbox"] > li, ul[role="listbox"] > div').all();
+      }
+      if (dropdownOptions.length === 0) {
+        dropdownOptions = await scraper.page!.locator('div[role="listbox"] > div').all();
+      }
+      
+      if (dropdownOptions.length > 0) {
+        console.log(`✅ Found ${dropdownOptions.length} options for "${categoryToType}"`);
+        break; // Success! Use these options
+      } else {
+        console.log(`⚠️  No options found for "${categoryToType}", trying parent category...`);
+      }
     }
     
-    // Type the search term to trigger dropdown
-    await categoryBox.fill(categoryToType);
-    await scraper.page!.waitForTimeout(1000); // Wait for dropdown to populate
-    
-    // Wait for dropdown to appear - try multiple selectors
-    let dropdownVisible = false;
-    try {
-      await scraper.page!.waitForSelector('div[role="option"], ul[role="listbox"] > *, div[role="listbox"] > *', { timeout: 3000, state: 'visible' });
-      dropdownVisible = true;
-    } catch (e) {
-      console.log('⚠️  Dropdown did not appear, checking if options exist anyway...');
-    }
-    
-    // Get all dropdown options - try multiple selectors
-    let dropdownOptions = await scraper.page!.locator('div[role="option"]').all();
-    
-    // Try alternative selectors if first one didn't work
     if (dropdownOptions.length === 0) {
-      dropdownOptions = await scraper.page!.locator('ul[role="listbox"] > li, ul[role="listbox"] > div').all();
-    }
-    if (dropdownOptions.length === 0) {
-      dropdownOptions = await scraper.page!.locator('div[role="listbox"] > div').all();
-    }
-    
-    if (dropdownOptions.length === 0) {
-      console.log('⚠️  No category dropdown options found, capturing HTML for debugging...');
+      console.log('❌ ERROR: No category dropdown options found for any level!');
+      console.log(`   Tried: ${attemptedCategories.join(', ')}`);
       
       // Capture HTML for debugging
       const htmlContent = await scraper.page!.content();
@@ -634,17 +652,24 @@ async function addFieldsForItem(data: ListingData, scraper: Scraper): Promise<vo
       const allVisibleDivs = await scraper.page!.locator('div:visible').all();
       console.log(`Found ${allVisibleDivs.length} visible divs on page`);
       
-      // Fallback: press Enter
-      console.log('⚠️  Pressing Enter as fallback');
-      await categoryBox.press('Enter');
-      await scraper.page!.waitForTimeout(1000);
+      // Check if we're in headless mode and give specific advice
+      console.log('');
+      console.log('🔍 TROUBLESHOOTING:');
+      console.log('   - If running in --headless mode, Facebook may be blocking the dropdown');
+      console.log('   - Try running WITHOUT --headless flag: npm run start');
+      console.log('   - Check debug-category-dropdown.html for what\'s actually on the page');
+      console.log('');
+      
+      // Throw error instead of trying to continue with invalid form
+      throw new Error('Category dropdown not found - cannot proceed with listing');
     } else {
       console.log(`🔍 Found ${dropdownOptions.length} category options, using fuzzy matching...`);
       
-      // Calculate similarity scores for each option
+      // Calculate similarity scores for each option using full category path
       const optionsWithScores = await Promise.all(
         dropdownOptions.map(async (option) => {
           const text = await option.textContent().catch(() => '');
+          // Use full category path for better matching
           const score = calculateSimilarity(fullCategory, text || '');
           return { option, text, score };
         })
@@ -653,26 +678,45 @@ async function addFieldsForItem(data: ListingData, scraper: Scraper): Promise<vo
       // Sort by score (highest first)
       optionsWithScores.sort((a, b) => b.score - a.score);
       
-      // Log top 3 matches for debugging
+      // Log top 5 matches for debugging (increased from 3 to see more options)
       console.log('📊 Top category matches:');
-      optionsWithScores.slice(0, 3).forEach((item, idx) => {
+      optionsWithScores.slice(0, Math.min(5, optionsWithScores.length)).forEach((item, idx) => {
         console.log(`  ${idx + 1}. "${item.text}" (score: ${(item.score * 100).toFixed(1)}%)`);
       });
       
       // Click the best match
       const bestMatch = optionsWithScores[0];
-      if (bestMatch.score > 0.3) { // Minimum threshold
+      if (bestMatch.score > 0.2) { // Lowered threshold from 0.3 to 0.2 for more flexibility
         await bestMatch.option.click();
         console.log(`✅ 3/5 - Selected category: "${bestMatch.text}" (score: ${(bestMatch.score * 100).toFixed(1)}%)`);
         await scraper.page!.waitForTimeout(1000);
       } else {
-        console.log(`⚠️  Best match score too low (${(bestMatch.score * 100).toFixed(1)}%), using first option`);
+        console.log(`⚠️  Best match score low (${(bestMatch.score * 100).toFixed(1)}%), but using it anyway`);
         await bestMatch.option.click();
+        console.log(`✅ 3/5 - Selected category: "${bestMatch.text}"`);
         await scraper.page!.waitForTimeout(1000);
       }
     }
   } catch (e) {
-    console.log('⚠️  Could not select category:', e);
+    console.log('❌ Error during category selection:', e);
+    
+    // Last-ditch effort: try to click any visible option
+    try {
+      console.log('🔄 Attempting emergency fallback: clicking first visible category option...');
+      const anyOption = scraper.page!.locator('div[role="option"]').first();
+      if (await anyOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+        const optionText = await anyOption.textContent().catch(() => 'unknown');
+        await anyOption.click();
+        console.log(`✅ 3/5 - Selected category (emergency fallback): "${optionText}"`);
+        await scraper.page!.waitForTimeout(1000);
+      } else {
+        console.log('❌ No category options available at all');
+        throw new Error('Failed to select category - no options available');
+      }
+    } catch (fallbackError) {
+      console.log('❌ Emergency fallback also failed:', fallbackError);
+      throw new Error('Category selection completely failed - cannot proceed');
+    }
   }
 
   // 4. Select Condition - it's a combobox label, not an input

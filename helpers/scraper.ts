@@ -1,6 +1,6 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Browser, BrowserContext, chromium, Page } from 'playwright';
 
 export class Scraper {
   private browser: Browser | null = null;
@@ -26,7 +26,9 @@ export class Scraper {
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
-        '--no-sandbox'
+        '--no-sandbox',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
       ]
     });
 
@@ -36,7 +38,11 @@ export class Scraper {
       deviceScaleFactor: 1,
       isMobile: false,
       hasTouch: false,
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      // Add extra context options to avoid detection
+      javaScriptEnabled: true,
+      bypassCSP: true,
+      ignoreHTTPSErrors: true
     };
 
     if (storageStatePath && fs.existsSync(storageStatePath)) {
@@ -46,6 +52,36 @@ export class Scraper {
 
     this.context = await this.browser.newContext(contextOptions);
     this.page = await this.context.newPage();
+    
+    // Mask automation indicators to avoid detection
+    await this.page.addInitScript(() => {
+      // Override navigator.webdriver
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // Override navigator properties to look more like a real browser
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+      });
+      
+      // Add chrome object (helps with detection)
+      (window as any).chrome = {
+        runtime: {},
+      };
+      
+      // Override permissions
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters: any) =>
+        parameters.name === 'notifications'
+          ? Promise.resolve({ state: 'denied' } as PermissionStatus)
+          : originalQuery(parameters);
+    });
+    
     await this.page.goto(url);
   }
 
