@@ -487,7 +487,7 @@ end tell
     
     await nextButton.click();
     console.log('✅ Clicked Next');
-    await scraper.page!.waitForTimeout(1000);
+    await scraper.page!.waitForTimeout(5000); // Increased from 1000ms to give page time to transition
     
     // Fill location if it appears after clicking Next
     await fillLocation(data['Location'], scraper);
@@ -789,7 +789,7 @@ async function addFieldsForVehicle(data: ListingData, scraper: Scraper): Promise
 async function fillLocation(location: string, scraper: Scraper): Promise<void> {
   try {
     const locationInput = scraper.page!.locator('input[aria-label="Location"]').first();
-    await locationInput.waitFor({ timeout: 5000, state: 'visible' });
+    await locationInput.waitFor({ timeout: 10000, state: 'visible' }); // Increased from 5000ms to 10000ms
     await locationInput.click();
     await scraper.page!.waitForTimeout(300);
     
@@ -832,6 +832,17 @@ async function fillLocation(location: string, scraper: Scraper): Promise<void> {
     await scraper.page!.waitForTimeout(500);
   } catch (e) {
     console.log('⚠️  Could not fill location:', e);
+    // Debug: Check what's actually on the page
+    const inputs = await scraper.page!.evaluate(() => {
+      return Array.from(document.querySelectorAll('input')).map(input => ({
+        type: input.type,
+        placeholder: input.placeholder,
+        ariaLabel: input.getAttribute('aria-label'),
+        name: input.name,
+        id: input.id
+      })).slice(0, 10); // Only first 10 to avoid spam
+    });
+    console.log('🔍 Available inputs on page:', JSON.stringify(inputs, null, 2));
   }
 }
 
