@@ -147,29 +147,51 @@ async function publishListing(
   // Wait a bit for form to fully render
   await scraper.page!.waitForTimeout(1000);
 
-  // Collect all files to upload (images + video)
+  // Upload images first
   const imagesPaths = generateMultipleImagesPath(data['Photos Folder'], data['Photos Names']);
-  const allFilePaths = [...imagesPaths];
-  
-  // Add video to the file list if present
-  if (data['Video Name'] && data['Video Name'].trim()) {
-    const videoPath = generateVideoPath(data['Photos Folder'], data['Video Name']);
-    allFilePaths.push(videoPath);
-    console.log(`📹 Adding video: ${videoPath}`);
+  if (imagesPaths.length > 0) {
+    const fileInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
+    await fileInput.setInputFiles(imagesPaths);
+    console.log(`📸 Uploaded ${imagesPaths.length} image(s)`);
+    await scraper.page!.waitForTimeout(3000); // Wait for images to process
   }
   
-  // Upload all files (images + video) at once
-  if (allFilePaths.length > 0) {
-    // Directly interact with the hidden file input (no need to click button)
-    // Facebook accepts both images and videos in the same input
-    const fileInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
-    await fileInput.setInputFiles(allFilePaths);
+  // Upload video separately if present
+  if (data['Video Name'] && data['Video Name'].trim()) {
+    const videoPath = generateVideoPath(data['Photos Folder'], data['Video Name']);
+    console.log(`📹 Uploading video: ${videoPath}`);
     
-    // Wait longer for files to upload (especially for video)
-    const hasVideo = data['Video Name'] && data['Video Name'].trim();
-    const uploadWaitTime = hasVideo ? 5000 : 2000;
-    console.log(`⏳ Waiting ${uploadWaitTime}ms for ${allFilePaths.length} file(s) to upload...`);
-    await scraper.page!.waitForTimeout(uploadWaitTime);
+    // Find the video-specific input (accept="video/*")
+    // Facebook has separate inputs: one for images (with multiple) and one for video
+    const videoInput = scraper.page!.locator('input[accept="video/*"]').first();
+    
+    try {
+      // Check if video input exists
+      const exists = await videoInput.count();
+      console.log(`🔍 Video input exists: ${exists > 0}`);
+      
+      if (exists > 0) {
+        await videoInput.setInputFiles([videoPath]);
+        console.log(`✅ Video file set on video input`);
+        await scraper.page!.waitForTimeout(5000); // Wait for video to upload and process
+      } else {
+        console.log('⚠️  Video input not found, trying alternative selectors...');
+        
+        // Fallback: try any input that accepts video
+        const allVideoInputs = await scraper.page!.locator('input[accept*="video"]').all();
+        console.log(`  Found ${allVideoInputs.length} input(s) accepting video`);
+        
+        if (allVideoInputs.length > 0) {
+          await allVideoInputs[0].setInputFiles([videoPath]);
+          console.log(`✅ Video uploaded via fallback method`);
+          await scraper.page!.waitForTimeout(5000);
+        } else {
+          console.log('⚠️  No video input found');
+        }
+      }
+    } catch (e) {
+      console.log('⚠️  Error uploading video:', e);
+    }
   }
 
   // Fill fields in order: Title, Price, Category, Condition, Description
