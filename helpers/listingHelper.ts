@@ -501,7 +501,9 @@ end tell
     if (await secondNextButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       await secondNextButton.click();
       console.log('✅ Clicked Next (delivery method page)');
-      await scraper.page!.waitForTimeout(1000);
+      // Wait longer for groups page to fully load
+      await scraper.page!.waitForTimeout(3000);
+      console.log('⏳ Waiting for groups list to load...');
     }
     
     // Add listing to multiple groups
@@ -981,13 +983,26 @@ async function findListingByTitle(title: string, scraper: Scraper) {
 async function addListingToMultipleGroups(data: ListingData, scraper: Scraper): Promise<void> {
   const groupNames = data['Groups'].split(';').map(name => name.trim()).filter(name => name);
   
+  // Wait for the groups list container to be visible
+  await scraper.page!.waitForTimeout(2000);
+  
   for (const groupName of groupNames) {
     try {
-      await scraper.page!.getByText(groupName).first().click();
+      console.log(`🔍 Looking for group: ${groupName}`);
+      // Try using getByText with a longer timeout
+      await scraper.page!.getByText(groupName).first().click({ timeout: 45000 });
+      console.log(`✅ Selected group: ${groupName}`);
       await scraper.page!.waitForTimeout(500);
     } catch (e) {
-      // Fallback to XPath
-      await scraper.page!.click(`xpath=//span[text()="${escapeXPathString(groupName)}"]`);
+      try {
+        // Fallback to XPath with increased timeout
+        console.log(`⚠️ Trying XPath selector for group: ${groupName}`);
+        await scraper.page!.click(`xpath=//span[text()="${escapeXPathString(groupName)}"]`, { timeout: 45000 });
+        console.log(`✅ Selected group via XPath: ${groupName}`);
+        await scraper.page!.waitForTimeout(500);
+      } catch (e2) {
+        console.log(`❌ Could not find group: ${groupName} - Skipping`);
+      }
     }
   }
 }
@@ -1026,10 +1041,12 @@ async function postListingToMultipleGroups(
       const searchInput = scraper.page!.getByPlaceholder(/search for groups/i).first();
       await searchInput.fill('');
       await searchInput.fill(groupName.substring(0, 51));
-      await scraper.page!.waitForTimeout(1000);
+      await scraper.page!.waitForTimeout(2000);
       
-      // Click the group
-      await scraper.page!.getByText(groupName).first().click();
+      // Click the group with increased timeout
+      console.log(`🔍 Looking for group: ${groupName}`);
+      await scraper.page!.getByText(groupName).first().click({ timeout: 45000 });
+      console.log(`✅ Selected group: ${groupName}`);
       await scraper.page!.waitForTimeout(1000);
       
       // Fill description
