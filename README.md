@@ -57,10 +57,10 @@ This script processes folders containing item photos and generates `items.json` 
 **Usage:**
 ```bash
 # Use current directory (where folders with photos are located)
-npx tsx instructions.ts
+npm run generate
 
 # Or specify a directory containing item folders
-npx tsx instructions.ts "/path/to/photos/directory"
+npm run generate -- "/path/to/photos/directory"
 ```
 
 This script will:
@@ -74,12 +74,12 @@ This script adds categories to each item in `items.json` using AI categorization
 **Usage:**
 ```bash
 # Normal mode (skips items that already have categories)
-npx tsx categorizer.ts
+npm run categorize
 
 # Overwrite mode (updates existing categories)
-npx tsx categorizer.ts --overwrite
+npm run categorize -- --overwrite
 # Or use short flag
-npx tsx categorizer.ts -o
+npm run categorize -- -o
 ```
 
 This script will:
@@ -94,15 +94,15 @@ This script adds photo folder paths and photo filenames to each item in `items.j
 **Usage:**
 ```bash
 # Use current directory (where folders with photos are located)
-npx tsx add_photos.ts
+npm run add-photos
 
 # Or specify a directory containing item folders
-npx tsx add_photos.ts "/path/to/photos/directory"
+npm run add-photos -- "/path/to/photos/directory"
 
 # Overwrite mode (updates existing photo entries)
-npx tsx add_photos.ts --overwrite
+npm run add-photos -- --overwrite
 # Or use short flag
-npx tsx add_photos.ts -o
+npm run add-photos -- -o
 ```
 
 This script will:
@@ -118,15 +118,15 @@ This script adds video filenames to each item in `items.json` (max 1 video per i
 **Usage:**
 ```bash
 # Use current directory (where folders with videos are located)
-npx tsx add_videos.ts
+npm run add-videos
 
 # Or specify a directory containing item folders
-npx tsx add_videos.ts "/path/to/photos/directory"
+npm run add-videos -- "/path/to/photos/directory"
 
 # Overwrite mode (updates existing video entries)
-npx tsx add_videos.ts --overwrite
+npm run add-videos -- --overwrite
 # Or use short flag
-npx tsx add_videos.ts -o
+npm run add-videos -- -o
 ```
 
 This script will:
@@ -139,12 +139,37 @@ This script will:
 
 **Note:** Videos use the same folder as photos (`photosFolder`).
 
+**⚠️ Important: Video Upload Limitation**
+
+Automated video uploads to Facebook Marketplace are currently **not possible** due to Facebook's anti-automation measures. The bot can handle all other aspects of listing creation (images, titles, descriptions, prices, categories, etc.), but videos must be added manually after the listing is posted.
+
+**Why video automation doesn't work:**
+- Facebook uses "trusted event" detection that can identify non-human interactions
+- All attempted methods fail: direct file input, AppleScript, Chrome DevTools Protocol (CDP)
+- Even setting files at the browser-engine level is detected and blocked
+
+**Workaround:**
+1. Let the bot create the listing with images and all other details
+2. The bot automatically saves video information to `items-videos.json`
+3. After the bot finishes, check `items-videos.json` for a list of all videos that need to be added
+4. Manually edit each listing on Facebook to add its corresponding video
+
+The `items-videos.json` file contains:
+- **title**: The listing title (to help you find it on Facebook)
+- **videoPath**: Full path to the video file
+- **size**: Video file size
+- **dateAdded**: When the listing was created
+
+See `items-videos.example.json` for the file format.
+
+This makes it easy to batch-upload videos to multiple listings after automation completes.
+
 ### 5. Generate CSV (`json_to_csv.ts`)
 This script converts `items.json` to CSV format for the marketplace bot.
 
 **Usage:**
 ```bash
-npx tsx json_to_csv.ts
+npm run json-to-csv
 ```
 
 This script will:
@@ -166,6 +191,20 @@ The CSV will include:
 - Video name (single filename, if present)
 - Facebook groups from `items-info.json` formatted as semicolon-separated strings
 
+### 6. Update Existing CSV Entries (`update_csv_info.ts`)
+This script updates all existing rows in your CSV with current values from `items-info.json`. Useful when you change your Facebook groups or location settings.
+
+**Usage:**
+```bash
+npm run update-csv
+```
+
+This script will:
+- Read current `items-info.json`
+- Update all rows in `csvs/items.csv` with the latest groups and location
+- Create a backup (`items.backup.csv`) before making changes
+- Only modify rows that actually differ from current settings
+
 ## How to Use
 1. Open folder where this project is saved on your local machine
 2. Open the `csvs` folder
@@ -177,13 +216,22 @@ The CSV will include:
 	- Marketplace fields that you have to select an option like `Category`, `Condition`, `Vehicle Type`, `Fuel Type`. You have to type the exact name of the option that you want to choose.
 	- `Groups` column contains multiple groups separated by this symbol `;`. Example - `Group name 1; Group name 2; Group name` (automatically populated from `items-info.json`)
 5. Open terminal inside the main project folder
-6. Run main.py with this command:
-    - Windows / Linux
-        ```
-        python main.py
-        ```
-    - Mac
-        ```
-        python3 main.py
-        ```
+6. Run the TypeScript bot with these commands:
+    ```bash
+    # Post all listings in the CSV
+    npm run start
+    
+    # Or limit to posting only N listings (useful for testing or rate limiting)
+    npm run start -- --max-posts 5
+    npm run start -- -n 3
+    ```
 7. The first time that you use the program, you will have to log in manually in the browser that have opened. After that the program will log in you automatically using the cookies from the first log in.
+
+**Note:** The `--max-posts` (or `-n`) flag allows you to control how many listings are posted in a single run. This is useful for:
+- Testing with a small number of posts first
+- Avoiding rate limits by spreading posts over time
+- Gradually posting large batches of items
+
+The bot will only count successfully posted items toward the limit and will show progress as it runs.
+
+**Note:** When passing arguments through npm scripts, you need the extra `--` separator (e.g., `npm run start -- --max-posts 5`).

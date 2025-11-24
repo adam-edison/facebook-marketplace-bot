@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import { ListingData, updateCsvStatus } from './csvHelper';
 import { Scraper } from './scraper';
@@ -109,13 +110,23 @@ export async function updateListings(
   listings: ListingData[],
   type: 'item' | 'vehicle',
   csvFileName: string,
-  scraper: Scraper
+  scraper: Scraper,
+  maxPosts?: number
 ): Promise<void> {
   if (!listings || listings.length === 0) {
     return;
   }
 
+  let postsCount = 0;
+
   for (const listing of listings) {
+    // Check if we've reached the max posts limit
+    if (maxPosts !== undefined && postsCount >= maxPosts) {
+      console.log(`\n🛑 Reached max posts limit (${maxPosts}). Stopping.`);
+      console.log(`📊 Posted ${postsCount} out of ${listings.length} total listings.`);
+      break;
+    }
+
     // Skip if already posted (shouldn't happen due to filtering, but double-check)
     if (listing.Status && listing.Status.trim().toLowerCase() === 'posted') {
       console.log(`⏭️  Skipping already posted: "${listing['Title']}"`);
@@ -129,6 +140,18 @@ export async function updateListings(
     if (!isPublished) {
       isPublished = await publishListing(listing, type, csvFileName, scraper);
     }
+
+    // Increment counter if successfully published
+    if (isPublished) {
+      postsCount++;
+      if (maxPosts !== undefined) {
+        console.log(`📈 Progress: ${postsCount}/${maxPosts} posts completed`);
+      }
+    }
+  }
+
+  if (maxPosts === undefined || postsCount < maxPosts) {
+    console.log(`\n✅ Finished posting all available listings (${postsCount} total).`);
   }
 }
 
@@ -147,7 +170,224 @@ async function publishListing(
   // Wait a bit for form to fully render
   await scraper.page!.waitForTimeout(1000);
 
-  // Upload images first
+  // Check if we have a video
+  // NOTE: Automated video upload is DISABLED - Facebook blocks it with trusted event detection
+  // Even CDP (Chrome DevTools Protocol) at browser-engine level + AppleScript doesn't work
+  // Facebook detects that events weren't from genuine user interaction
+  // Videos must be added manually after the listing is posted
+  const ENABLE_VIDEO_UPLOAD = false; // Set to true to attempt (will fail)
+  
+  const hasVideo = data['Video Name'] && data['Video Name'].trim();
+  const videoPath = hasVideo ? generateVideoPath(data['Photos Folder'], data['Video Name']) : null;
+  
+  if (hasVideo && videoPath && fs.existsSync(videoPath)) {
+    if (!ENABLE_VIDEO_UPLOAD) {
+      const stats = fs.statSync(videoPath);
+      console.log(`📹 Video found (${(stats.size / 1024 / 1024).toFixed(2)} MB): ${videoPath}`);
+      console.log(`⚠️  Automated video upload is DISABLED - Facebook blocks it`);
+      console.log(`   To add video: manually edit the listing after it's posted`);
+      
+      // Save video info to items-videos.json for manual upload later
+      try {
+        const videosJsonPath = './items-videos.json';
+        let videosData: Array<{ title: string; videoPath: string; size: string; dateAdded: string }> = [];
+        
+        // Load existing data if file exists
+        if (fs.existsSync(videosJsonPath)) {
+          const existingData = fs.readFileSync(videosJsonPath, 'utf8');
+          videosData = JSON.parse(existingData);
+        }
+        
+        // Add new entry (check if not already added)
+        const existingEntry = videosData.find(v => v.title === data.Title && v.videoPath === videoPath);
+        if (!existingEntry) {
+          videosData.push({
+            title: data.Title,
+            videoPath: videoPath,
+            size: `${(stats.size / 1024 / 1024).toFixed(2)} MB`,
+            dateAdded: new Date().toISOString()
+          });
+          
+          // Save updated data
+          fs.writeFileSync(videosJsonPath, JSON.stringify(videosData, null, 2), 'utf8');
+          console.log(`✅ Saved video info to ${videosJsonPath}`);
+        }
+      } catch (e) {
+        console.log(`⚠️  Could not save video info: ${e}`);
+      }
+    }
+  }
+  
+  if (ENABLE_VIDEO_UPLOAD && hasVideo && videoPath && fs.existsSync(videoPath)) {
+    console.log(`📹 Video detected, uploading FIRST: ${videoPath}`);
+    const stats = fs.statSync(videoPath);
+    console.log(`✅ Video file exists (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    
+    try {
+      // Click "Add Video" to open the file picker
+      console.log(`🖱️  Clicking "Add Video" to open file picker...`);
+      const addVideoButton = scraper.page!.locator('text=/add.*video/i').first();
+      await addVideoButton.click();
+      console.log(`✅ Clicked "Add Video"`);
+      
+      // Wait longer for the file picker dialog to fully appear
+      console.log(`⏳ Waiting for file picker dialog to open...`);
+      await scraper.page!.waitForTimeout(3000);
+      
+      // Use AppleScript to select the file
+      console.log(`🍎 Using AppleScript to select video file...`);
+      
+      // Escape the path for AppleScript - need to escape backslashes and quotes
+      const escapedPath = videoPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      
+      // AppleScript to navigate to file and select it
+      // We use Cmd+Shift+G to open "Go to Folder" dialog, type path, and press Enter twice
+      const appleScript = `
+tell application "System Events"
+  delay 1
+  keystroke "g" using {command down, shift down}
+  delay 1
+  keystroke "${escapedPath}"
+  delay 1
+  keystroke return
+  delay 1
+  keystroke return
+  delay 1
+end tell
+      `.trim();
+      
+      // Write AppleScript to a temp file to avoid shell escaping issues
+      const tempScriptPath = '/tmp/fb-marketplace-video-upload.scpt';
+      fs.writeFileSync(tempScriptPath, appleScript);
+      
+      // Execute AppleScript synchronously (blocks until complete)
+      try {
+        execSync(`osascript ${tempScriptPath}`, { 
+          stdio: 'pipe',
+          timeout: 15000 
+        });
+        console.log(`✅ AppleScript executed successfully`);
+        
+        // Clean up temp file
+        fs.unlinkSync(tempScriptPath);
+      } catch (e: any) {
+        console.log(`❌ AppleScript failed: ${e.message}`);
+        
+        // Clean up temp file
+        if (fs.existsSync(tempScriptPath)) {
+          fs.unlinkSync(tempScriptPath);
+        }
+        
+        // Throw error to stop the script
+        throw new Error(`Video upload failed - AppleScript could not select the file: ${e.message}`);
+      }
+      
+      // Wait for file picker to close by checking if we can interact with the page again
+      console.log(`⏳ Waiting for file picker to close...`);
+      let dialogClosed = false;
+      let attempts = 0;
+      while (!dialogClosed && attempts < 15) {
+        try {
+          // Try to check page state - if file picker is open, this might not work
+          await scraper.page!.waitForTimeout(1000);
+          const pageTitle = await scraper.page!.title();
+          if (pageTitle) {
+            dialogClosed = true;
+            console.log(`✅ File picker closed, page is responsive`);
+          }
+        } catch (e) {
+          // Still waiting
+        }
+        attempts++;
+      }
+      
+      if (!dialogClosed) {
+        console.log(`⚠️  Waited 15 seconds but couldn't confirm dialog closed, continuing anyway...`);
+      }
+      
+      // Try using CDP (Chrome DevTools Protocol) to set files at the lowest level possible
+      console.log(`🔧 Using CDP to set file at browser level...`);
+      const videoInput = scraper.page!.locator('input[accept="video/*"]').first();
+      
+      try {
+        // Get CDP session
+        const client = await scraper.page!.context().newCDPSession(scraper.page!);
+        
+        // Enable DOM domain
+        await client.send('DOM.enable');
+        
+        // Get the document root
+        const { root } = await client.send('DOM.getDocument');
+        
+        // Find the video input element using querySelector
+        const { nodeId } = await client.send('DOM.querySelector', {
+          nodeId: root.nodeId,
+          selector: 'input[accept="video/*"]'
+        });
+        
+        if (nodeId) {
+          // Use CDP's DOM.setFileInputFiles which works at the browser engine level
+          await client.send('DOM.setFileInputFiles', {
+            files: [videoPath],
+            nodeId
+          });
+          console.log(`✅ Set video file using CDP (node ${nodeId})`);
+        } else {
+          console.log(`⚠️  Could not find video input via CDP, falling back to Playwright method`);
+          await videoInput.setInputFiles([videoPath]);
+          console.log(`✅ Set video file using Playwright fallback`);
+        }
+        
+        await client.detach();
+      } catch (cdpError) {
+        console.log(`⚠️  CDP method failed: ${cdpError}, using Playwright fallback`);
+        await videoInput.setInputFiles([videoPath]);
+        console.log(`✅ Set video file using Playwright fallback`);
+      }
+      
+      // Trigger events to notify Facebook
+      await videoInput.evaluate((input: HTMLInputElement) => {
+        input.focus();
+        const events = [
+          new Event('change', { bubbles: true }),
+          new Event('input', { bubbles: true }),
+          new InputEvent('input', { bubbles: true }),
+        ];
+        events.forEach(e => input.dispatchEvent(e));
+        input.blur();
+      });
+      console.log(`✅ Triggered events on video input`);
+      
+      // Wait for video to start uploading
+      console.log(`⏳ Waiting for video upload to start (5 seconds)...`);
+      await scraper.page!.waitForTimeout(5000);
+      
+      // Check if "Add Video" text disappeared
+      const addVideoStillVisible = await scraper.page!.locator('text=/add.*video/i').isVisible().catch(() => false);
+      if (!addVideoStillVisible) {
+        console.log(`✅ "Add Video" text disappeared - video upload started!`);
+      } else {
+        console.log(`⚠️  "Add Video" text still visible - checking for video preview...`);
+        const videoElement = await scraper.page!.locator('video').count();
+        if (videoElement > 0) {
+          console.log(`✅ Video element found in page - upload started!`);
+        } else {
+          console.log(`❌ No video element found - upload failed!`);
+          throw new Error('Video upload failed - no video element detected after file selection');
+        }
+      }
+      
+      // Wait for video to fully upload (videos take time)
+      console.log(`⏳ Waiting for video to finish uploading (20 seconds)...`);
+      await scraper.page!.waitForTimeout(20000);
+    } catch (e) {
+      console.log(`❌ Error uploading video with AppleScript: ${e}`);
+      // Re-throw the error to stop the entire script
+      throw e;
+    }
+  }
+
+  // Upload images after video (or just images if no video)
   const imagesPaths = generateMultipleImagesPath(data['Photos Folder'], data['Photos Names']);
   if (imagesPaths.length > 0) {
     const fileInput = await scraper.page!.locator('input[accept*="image"], input[accept*="video"]').first();
@@ -156,44 +396,6 @@ async function publishListing(
     await scraper.page!.waitForTimeout(3000); // Wait for images to process
   }
   
-  // Upload video separately if present
-  if (data['Video Name'] && data['Video Name'].trim()) {
-    const videoPath = generateVideoPath(data['Photos Folder'], data['Video Name']);
-    console.log(`📹 Uploading video: ${videoPath}`);
-    
-    // Find the video-specific input (accept="video/*")
-    // Facebook has separate inputs: one for images (with multiple) and one for video
-    const videoInput = scraper.page!.locator('input[accept="video/*"]').first();
-    
-    try {
-      // Check if video input exists
-      const exists = await videoInput.count();
-      console.log(`🔍 Video input exists: ${exists > 0}`);
-      
-      if (exists > 0) {
-        await videoInput.setInputFiles([videoPath]);
-        console.log(`✅ Video file set on video input`);
-        await scraper.page!.waitForTimeout(5000); // Wait for video to upload and process
-      } else {
-        console.log('⚠️  Video input not found, trying alternative selectors...');
-        
-        // Fallback: try any input that accepts video
-        const allVideoInputs = await scraper.page!.locator('input[accept*="video"]').all();
-        console.log(`  Found ${allVideoInputs.length} input(s) accepting video`);
-        
-        if (allVideoInputs.length > 0) {
-          await allVideoInputs[0].setInputFiles([videoPath]);
-          console.log(`✅ Video uploaded via fallback method`);
-          await scraper.page!.waitForTimeout(5000);
-        } else {
-          console.log('⚠️  No video input found');
-        }
-      }
-    } catch (e) {
-      console.log('⚠️  Error uploading video:', e);
-    }
-  }
-
   // Fill fields in order: Title, Price, Category, Condition, Description
   if (listingType === 'item') {
     await addFieldsForItem(data, scraper);

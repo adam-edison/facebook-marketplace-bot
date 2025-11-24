@@ -5,7 +5,13 @@
   "main": "index.js",
   "scripts": {
     "start": "tsx main.ts",
-    "login": "tsx save-login.ts"
+    "login": "tsx save-login.ts",
+    "update-csv": "tsx update_csv_info.ts",
+    "json-to-csv": "tsx json_to_csv.ts",
+    "categorize": "tsx categorizer.ts",
+    "add-photos": "tsx add_photos.ts",
+    "add-videos": "tsx add_videos.ts",
+    "generate": "tsx instructions.ts"
   },
   "repository": {
     "type": "git",
